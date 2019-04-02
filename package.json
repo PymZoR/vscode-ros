@@ -66,6 +66,10 @@
         "ros.distro": {
           "type": "string",
           "description": "ROS distro name to use (kinetic, jade, ...)"
+        },
+        "ros.cpp.format.enable": {
+          "type": "boolean",
+          "description": "Enable ROS default clang-format"
         }
       }
     },

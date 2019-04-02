@@ -39,6 +39,11 @@ export let onDidChangeEnv = onEnvChanged.event;
  */
 let subscriptions = <vscode.Disposable[]>[];
 
+/**
+ * Holder for the cpp formatter to dispose when config is changed.
+ */
+let formatter:vscode.Disposable | null = null;
+
 export async function activate(context: vscode.ExtensionContext) {
   // Activate if we're in a catkin workspace.
   await determineBuildSystem(vscode.workspace.rootPath);
@@ -47,25 +52,41 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
 
+  let config = utils.getConfig();
+
   console.log(`Activating ROS extension in "${baseDir}"`);
 
   // Activate components when the ROS env is changed.
   context.subscriptions.push(onDidChangeEnv(activateEnvironment.bind(null, context)));
 
   // Activate components which don't require the ROS env.
-  context.subscriptions.push(vscode.languages.registerDocumentFormattingEditProvider(
-    "cpp", new CppFormatter()
-  ));
+  const enableFormatOnSave = config.get<Boolean>("cpp.format.enable");
+
+  if (enableFormatOnSave) {
+    formatter = vscode.languages.registerDocumentFormattingEditProvider(
+      "cpp", new CppFormatter()
+    );
+    context.subscriptions.push(formatter);
+  }
 
   // Source the environment, and re-source on config change.
-  let config = utils.getConfig();
-
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(() => {
     const updatedConfig = utils.getConfig();
     const fields = Object.keys(config).filter(k => !(config[k] instanceof Function));
     const changed = fields.some(key => updatedConfig[key] !== config[key]);
 
     if (changed) {
+      if (updatedConfig.cpp.format.enable !== config.cpp.format.enable) {
+        if (updatedConfig.cpp.format.enable) {
+          formatter = vscode.languages.registerDocumentFormattingEditProvider(
+            "cpp", new CppFormatter()
+          );
+          context.subscriptions.push(formatter);
+        } else if (!updatedConfig.cpp.format.enable && formatter) {
+          formatter.dispose();
+        }
+      }
+
       sourceRosAndWorkspace();
     }
 
